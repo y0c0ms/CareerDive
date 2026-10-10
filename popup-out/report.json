@@ -1,0 +1,239 @@
+[
+ {
+  "id": "(1) hero GIF first: hero container present with that src, image not duplicated in the body",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": true,
+   "heroImg": "https://media.test/hero.gif",
+   "heroLoaded": true,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    500,
+    274
+   ],
+   "bodyImgs": [
+    "https://media.test/second.png"
+   ],
+   "bodyText": "Gif first\n\nSome text about the project.",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "(2) shields.io badges are skipped, the screenshot becomes the hero",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": true,
+   "heroImg": "https://media.test/shot.png",
+   "heroLoaded": true,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    500,
+    274
+   ],
+   "bodyImgs": [
+    "https://img.shields.io/badge/build-passing-green.svg",
+    "https://img.shields.io/github/stars/a/b",
+    "https://media.test/tiny.png"
+   ],
+   "bodyText": "  \n\nBadges then screenshot\n\nText below.",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "(3) text-only README: no hero container shown, text layout unchanged",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": false,
+   "heroImg": null,
+   "heroLoaded": null,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    0,
+    0
+   ],
+   "bodyImgs": [],
+   "bodyText": "Only text\n\nNo pictures here, just words and a link.\n\none\ntwo",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "(4a) user-attachments link: <video> created with muted + loop + autoplay + playsinline",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": true,
+   "heroImg": null,
+   "heroLoaded": null,
+   "video": {
+    "muted": true,
+    "loop": true,
+    "autoplay": true,
+    "playsinline": true,
+    "controls": true,
+    "src": "https://github.com/user-attachments/assets/1234abcd-0000-4444-8888-abcdefabcdef"
+   },
+   "heroLink": false,
+   "heroBox": [
+    500,
+    274
+   ],
+   "bodyImgs": [],
+   "bodyText": "Video\n\nWatch this:\n\nAnd the text goes on.",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "(4a) the video link is removed from the text flow",
+  "pass": true,
+  "detail": "Video\n\nWatch this:\n\nAnd the text goes on."
+ },
+ {
+  "id": "(4b) a link ending .mp4 becomes the hero video",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": true,
+   "heroImg": null,
+   "heroLoaded": null,
+   "video": {
+    "muted": true,
+    "loop": true,
+    "autoplay": true,
+    "playsinline": true,
+    "controls": true,
+    "src": "https://media.test/demo.mp4"
+   },
+   "heroLink": false,
+   "heroBox": [
+    500,
+    274
+   ],
+   "bodyImgs": [],
+   "bodyText": "Direct mp4\n\nText.",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "(5) broken hero image falls back to the text layout",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": false,
+   "heroImg": null,
+   "heroLoaded": null,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    0,
+    0
+   ],
+   "bodyImgs": [],
+   "bodyText": "Broken hero\n\nStill readable.",
+   "modalBox": [
+    730,
+    28,
+    540,
+    682
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "[desktop] no page errors",
+  "pass": true,
+  "detail": []
+ },
+ {
+  "id": "[phone 844x390] hero left, text right, popup fits the viewport",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": true,
+   "heroImg": "https://media.test/hero.gif",
+   "heroLoaded": true,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    239,
+    135
+   ],
+   "bodyImgs": [
+    "https://media.test/second.png"
+   ],
+   "bodyText": "Gif first\n\nSome text about the project.",
+   "modalBox": [
+    164,
+    26,
+    552,
+    354
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "[phone 844x390] text-only popup fits the viewport",
+  "pass": true,
+  "detail": {
+   "open": true,
+   "hasHero": false,
+   "heroImg": null,
+   "heroLoaded": null,
+   "video": null,
+   "heroLink": false,
+   "heroBox": [
+    0,
+    0
+   ],
+   "bodyImgs": [],
+   "bodyText": "Only text\n\nNo pictures here, just words and a link.\n\none\ntwo",
+   "modalBox": [
+    164,
+    26,
+    552,
+    354
+   ],
+   "fitsViewport": true
+  }
+ },
+ {
+  "id": "[phone] no page errors",
+  "pass": true,
+  "detail": []
+ }
+]

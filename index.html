@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deep Diver · y0c0ms</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#3d758e">
+<meta name="description" content="A retro pixel-art dive through the GitHub repositories of y0c0ms. Every repo is a glowing shrine.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Deep Diver: a pixel-art dive through y0c0ms's repos">
+<meta property="og:description" content="Swim through a reef, a kelp forest and a deep cave. Every GitHub repository is a shrine with its README.">
+<meta property="og:url" content="https://y0c0ms.github.io/CareerDive/">
+<meta property="og:image" content="https://y0c0ms.github.io/CareerDive/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Deep Diver: a pixel-art dive through y0c0ms's repos">
+<meta name="twitter:description" content="Swim through a reef, a kelp forest and a deep cave. Every GitHub repository is a shrine with its README.">
+<meta name="twitter:image" content="https://y0c0ms.github.io/CareerDive/preview.png">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game"></div>
+
+<canvas id="hud" role="status"></canvas>
+
+<div id="modal" class="hidden" role="dialog" aria-labelledby="modal-name">
+  <div id="modal-head"><h2 id="modal-name"></h2><button id="modal-close" type="button" aria-label="Close">X</button></div>
+  <div id="modal-hero"></div>
+  <div id="modal-stats"></div>
+  <div id="modal-topics"></div>
+  <p id="modal-desc"></p>
+  <a id="modal-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+  <div id="modal-readme"></div>
+</div>
+
+<div id="end" class="hidden"><div id="end-title"></div><div id="end-sub"></div><div id="end-hint"></div></div>
+
+<div id="stick"><div id="stick-knob"></div></div>
+<div id="boost" role="button" aria-label="Boost"><canvas id="boost-cv" width="19" height="19"></canvas></div>
+<div id="flash"></div>
+
+<div id="rotate" class="hidden">
+  <div id="rotate-phone"><i></i></div>
+  <div id="rotate-title">ROTATE YOUR PHONE</div>
+  <div id="rotate-sub">Deep Diver is played in landscape</div>
+</div>
+
+<div id="loading"><div id="loading-text">DIVING IN</div></div>
+
+<script src="vendor/phaser.min.js"></script>
+<script src="vendor/marked.min.js"></script>
+<script src="js/art.js"></script>
+<script src="js/wildlife.js"></script>
+<script src="js/shrines.js"></script>
+<script src="js/data.js"></script>
+<script src="js/world.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/segments.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/ui.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
