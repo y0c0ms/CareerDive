@@ -1,9 +1,9 @@
 :root { --ink: #2a3428; --paper: #eef2e8; --foam: #b3cbb6; --sun: #f0d860; --water: #3d758e; --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--water); overscroll-behavior: none; touch-action: none;
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; background: var(--water); overscroll-behavior: none; touch-action: none;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; font-family: var(--mono); color: var(--paper); }
-body { position: fixed; inset: 0; }
-#game { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; touch-action: none; }
+body { position: fixed; inset: 0; height: 100dvh; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; touch-action: none; }
 canvas { display: block; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 .hidden { display: none !important; }
 
@@ -50,18 +50,18 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; image-r
 #end-hint { font: 700 clamp(13px, 2vw, 20px) var(--mono); color: var(--ink); background: var(--foam); padding: 8px 16px; border: 3px solid var(--paper); box-shadow: 4px 4px 0 #000; animation: blink 1.2s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .55; } }
 
-#stick { display: none; position: fixed; z-index: 15; left: calc(max(14px, env(safe-area-inset-left)) + 10px); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 10px); width: 120px; height: 120px;
-  border-radius: 50%; background: rgba(42, 52, 40, .42); border: 4px solid rgba(179, 203, 182, .75); touch-action: none; }
+#stick { display: none; position: fixed; z-index: 15; left: calc(max(14px, env(safe-area-inset-left)) + 6px); bottom: calc(max(12px, env(safe-area-inset-bottom)) + 6px); width: 100px; height: 100px;
+  border-radius: 50%; background: rgba(42, 52, 40, .2); border: 3px solid rgba(179, 203, 182, .6); touch-action: none; }
 .touch #stick { display: block; }
-#boost { display: none; position: fixed; z-index: 16; right: calc(max(14px, env(safe-area-inset-right)) + 10px); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 10px); width: 84px; height: 84px; touch-action: none; }
+#boost { display: none; position: fixed; z-index: 16; right: calc(max(14px, env(safe-area-inset-right)) + 6px); bottom: calc(max(12px, env(safe-area-inset-bottom)) + 6px); width: 76px; height: 76px; touch-action: none; }
 .touch #boost { display: block; }
 #boost canvas { width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, .35)); }
-.touch #modal { left: calc(max(14px, env(safe-area-inset-left)) + 150px); right: calc(max(14px, env(safe-area-inset-right)) + 114px); width: auto; }
+.touch #modal { left: calc(max(14px, env(safe-area-inset-left)) + 130px); right: calc(max(14px, env(safe-area-inset-right)) + 100px); width: auto; }
 #flash { position: fixed; inset: 0; z-index: 24; pointer-events: none; background: #d83048; opacity: 0; }
 #flash.hit { animation: flash .4s steps(5) 1; }
 @keyframes flash { 0% { opacity: .5; } 100% { opacity: 0; } }
-#stick::before { content: ""; position: absolute; inset: 14px; border-radius: 50%; border: 2px dashed rgba(179, 203, 182, .4); }
-#stick-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: #e4a830; border: 4px solid #2a3428; box-shadow: inset -5px -5px 0 #c0600c, inset 4px 4px 0 #f0d860; pointer-events: none; }
+#stick::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; border: 2px dashed rgba(179, 203, 182, .3); }
+#stick-knob { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: #e4a830; border: 3px solid #2a3428; box-shadow: inset -4px -4px 0 #c0600c, inset 3px 3px 0 #f0d860; pointer-events: none; opacity: .92; }
 
 #rotate { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 24px; text-align: center; background: #3d758e;
   background-image: repeating-linear-gradient(0deg, rgba(42, 52, 40, .18) 0 4px, transparent 4px 8px); touch-action: none; }

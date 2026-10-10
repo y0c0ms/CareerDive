@@ -1,5 +1,5 @@
 // Deep Diver: Phaser scene (rendering, physics, shrines, fauna) and the window.__test hook.
-const SPEED = 220, VSPEED = 210, SINK = 36, HIT_W = 24, HIT_H = 12;      // wpx per second / half hitbox in wpx
+const SPEED = 220, VSPEED = 210, SINK = 36, HIT_W = 27, HIT_H = 13;      // wpx per second / half hitbox in wpx
 const BOOST_X = 1.7, BOOST_Y = 1.45, BOOST_DRAIN = 1 / 3, BOOST_REFILL = 1 / 4, BOOST_MIN = 0.15, BOOST_EMIT = 7, BOOST_POOL = 48;
 const DIVER_MIN_Y = (SURF + 6) * K, DIVER_MAX_Y = (FLOOR - 8) * K;
 const MAX_GLOWS = 14;
@@ -20,13 +20,30 @@ const SHEET_DEFS = {
 };
 
 const tri = p => { p -= Math.floor(p); return p < 0.5 ? 4 * p - 1 : 3 - 4 * p; };       // triangle wave -1..1, rising first
-const computeGW = () => Math.min(GW_MAX, Math.max(GW_MIN, 2 * Math.round(GH * innerWidth / innerHeight / 2)));
+// ---- view: desktop and tablets keep the classic 480+ x 270 internal view. On phones the picture is drawn at about one css pixel per internal pixel
+// (a whole number of device pixels), which shows ~1.45x more of the world; the extra rows are sky above and bedrock below the 270-row world.
+const PHONE_MAX_H = 560, TOP_FRAC = 0.4;
+const vvSize = () => { const v = window.visualViewport; return { w: v ? v.width : innerWidth, h: v ? v.height : innerHeight }; };
+function computeView() {
+  const { w: vw, h: vh } = vvSize();
+  if (UI.touch && vh <= PHONE_MAX_H && vw > vh) {
+    const dpr = window.devicePixelRatio || 1, oldS = vh / GH;          // oldS: css px per internal px of the previous (classic) view
+    // prefer a whole number of device pixels per internal pixel (perfectly crisp) when it shows at least 1.35x the old width, else zoom out to 1.45x
+    let s = Math.max(1, Math.round(dpr)) / dpr; if (oldS / s < 1.35) s = oldS / 1.45;
+    s = Math.max(0.8, s);
+    const gh = Math.max(GH, Math.min(GH + PADT + PADB, Math.round(vh / s))), gw = Math.min(GW_MAX, Math.max(GW_MIN, 2 * Math.round(vw / s / 2))), pad = gh - GH;
+    const top = Math.min(PADT, pad, Math.max(Math.round(pad * TOP_FRAC), Math.ceil(30 / s)));
+    return { phone: true, gw, gh, top };
+  }
+  return { phone: false, gw: Math.min(GW_MAX, Math.max(GW_MIN, 2 * Math.round(GH * innerWidth / innerHeight / 2))), gh: GH, top: 0 };
+}
+let VIEW = computeView();
 
 class Main extends Phaser.Scene {
   constructor() { super('Main'); }
   create() {
     const repos = BOOT.repos;
-    this.t = 0; this.gw = this.scale.gameSize.width;
+    this.t = 0; this.gw = this.scale.gameSize.width; this.gh = this.scale.gameSize.height;
     this.world = layoutWorld(repos); this.lib = buildLibrary(); this.sc = new Scenery(this.world, this.lib);
     this.sheetN = {}; this.sheetHot = {}; this.sheetDim = {};
     for (const k in SHEET_DEFS) {
@@ -44,17 +61,17 @@ class Main extends Phaser.Scene {
       ['zWater', L.backdrop], ['zHaze', L.haze], ['zMid', L.mid], ['zClouds', [L.clouds, L.clouds, blank(TILE_W, 44)]],
       ['zShaftA', L.shaftsA], ['zShaftB', L.shaftsB], ['zCausA', L.causA], ['zCausB', L.causB], ['zSurf', L.surface]
     ].map(([key, v]) => new ZoneBlend(this, key, v));
-    this.add.image(0, 0, 'zWater').setOrigin(0, 0).setScrollFactor(0).setDepth(0);
+    this.bg = this.add.image(0, 0, 'zWater').setOrigin(0, 0).setScrollFactor(0).setDepth(0);
     this.par = [];
-    const par = (key, y, factor, depth, drift) => { const l = addParallax(this, key, y, TILE_W, factor, depth); l.driftSpeed = drift || 0; this.par.push(l); };
-    par('zClouds', 3, 0.05, 0.5, 3); par('zHaze', 105, 0.15, 1); par('zShaftA', SURF + 1, 0.05, 0.6, 1.2); par('zShaftB', SURF + 1, 0.1, 0.7, -1.8);
+    const par = (key, y, factor, depth, drift) => { const l = addParallax(this, key, y, TILE_W, factor, depth); l.driftSpeed = drift || 0; l.y0 = y; this.par.push(l); };
+    par('zClouds', -40, 0.03, 0.45, -2); this.par[0].phoneOnly = true; par('zClouds', 3, 0.05, 0.5, 3); par('zHaze', 105, 0.15, 1); par('zShaftA', SURF + 1, 0.05, 0.6, 1.2); par('zShaftB', SURF + 1, 0.1, 0.7, -1.8);
     par('zCausA', SURF + 1, 0.02, 2.5, 5); par('zCausB', SURF + 1, 0.03, 2.6, -4); par('zMid', 173, 0.35, 4);
     par('zSurf', SURF - 2, 1, 4.4, 6);
 
     // ---- world segment pool (two canvases per slot: behind and in front of the action)
     this.slots = Array.from({ length: SEG_POOL }, (_, i) => {
-      const mk = (key, depth) => { const tex = this.textures.createCanvas(key + i, SEG_W, GH); tex.context.imageSmoothingEnabled = false; return { tex, img: this.add.image(0, 0, key + i).setOrigin(0, 0).setDepth(depth).setVisible(false) }; };
-      return { seg: -1, back: mk('segB', 4.5), front: mk('segF', 8) };
+      const mk = (key, depth) => { const tex = this.textures.createCanvas(key + i, SEG_W, SEGH); tex.context.imageSmoothingEnabled = false; return { tex, img: this.add.image(0, 0, key + i).setOrigin(0, 0).setDepth(depth).setVisible(false) }; };
+      return { seg: -999, back: mk('segB', 4.5), front: mk('segF', 8) };
     });
 
     // ---- diver, bubbles
@@ -63,7 +80,7 @@ class Main extends Phaser.Scene {
     this.bpool = Array.from({ length: BOOST_POOL }, () => ({ on: false, x: 0, y: 0, vx: 0, vy: 0, age: 0, life: 1, img: this.add.image(0, 0, 'bub', 0).setDepth(12).setVisible(false) }));
     this.bpoolI = 0; this.emitted = 0; this.emitAcc = 0; this.burst = 0; this.trail = 0; this.brng = makeRng(555); this.testBoost = false;
     const brng = makeRng(99);
-    this.bubs = makeBubbleField(24, GW_MAX, GH, brng); this.bubs.forEach(b => b.img = this.add.image(0, 0, 'bub', b.f).setDepth(11).setScrollFactor(0));
+    this.bubs = makeBubbleField(28, GW_MAX, SEGH, brng); this.bubs.forEach(b => b.img = this.add.image(0, 0, 'bub', b.f).setDepth(11).setScrollFactor(0));
 
     // ---- runtime state
     this.live = new Map(); this.creatures = []; this.anim = []; this.shrineLive = new Map(); this.glows = new Map();
@@ -71,7 +88,7 @@ class Main extends Phaser.Scene {
     this.reset();
     UI.onClose = () => this.closePopup(true);
     UI.onRestart = () => { if (this.mode !== 'play') this.reset(); };
-    this.scale.on('resize', gs => { this.gw = gs.width; });
+    this.scale.on('resize', gs => { this.gw = gs.width; this.gh = gs.height; });
     this.installTestHook();
     this.cameras.main.setBackgroundColor('#3d758e');
     const ld = $('loading'); ld.classList.add('done'); setTimeout(() => ld.remove(), 600);
@@ -148,12 +165,12 @@ class Main extends Phaser.Scene {
 
   // ---------------- streaming of segments, plants, fauna and shrine overlays
   ensureSegments(camX) {
-    const s0 = Math.max(0, Math.floor(camX / SEG_W)), s1 = Math.min(this.sc.nSeg - 1, Math.floor((camX + this.gw) / SEG_W));
+    const s0 = Math.max(-1, Math.floor(camX / SEG_W)), s1 = Math.min(this.sc.nSeg, Math.floor((camX + this.gw) / SEG_W));
     for (let s = s0; s <= s1; s++) {
-      const slot = this.slots[s % SEG_POOL];
+      const slot = this.slots[((s % SEG_POOL) + SEG_POOL) % SEG_POOL];
       if (slot.seg !== s) {
         this.sc.paintBack(s, slot.back.tex.context); this.sc.paintFront(s, slot.front.tex.context); slot.back.tex.refresh(); slot.front.tex.refresh();
-        slot.seg = s; slot.back.img.setPosition(s * SEG_W, 0).setVisible(true); slot.front.img.setPosition(s * SEG_W, 0).setVisible(true);
+        slot.seg = s; slot.back.img.setPosition(s * SEG_W, -PADT).setVisible(true); slot.front.img.setPosition(s * SEG_W, -PADT).setVisible(true);
       }
     }
   }
@@ -226,10 +243,13 @@ class Main extends Phaser.Scene {
     if (UI.paused) return;
     const dt = Math.min(dtMs / 1000, 0.05); this.t += dt; const t = this.t;
     if (this.mode === 'play') { this.step(dt); if (this.mode === 'play') this.updatePopup(); }
-    const cam = this.cameras.main, gw = this.gw, maxCam = Math.max(0, this.world.W / K - gw);
-    const target = Math.min(maxCam, Math.max(0, this.x / K - gw * 0.36));
+    const cam = this.cameras.main, gw = this.gw, top = VIEW.top, phone = VIEW.phone, maxCam = Math.max(0, this.world.W / K - gw);
+    // desktop: the diver sits 36 % from the left and the camera stops at both ends of the world. Phones: the diver is held 42 % from the left at all times
+    // (the camera may scroll past the ends, where a rock cliff stands) so it never ends up under the joystick, whose zone is the left edge
+    const raw = this.x / K - gw * (phone ? 0.42 : 0.36), target = phone ? raw : Math.min(maxCam, Math.max(0, raw));
     if (this.snap) { this.camX = target; this.snap = false; } else this.camX += (target - this.camX) * (1 - Math.exp(-dt * 6));
-    const camX = Math.round(this.camX); cam.scrollX = camX; cam.scrollY = 0;
+    const camX = Math.round(this.camX); cam.scrollX = camX; cam.scrollY = -top;
+    this.bg.setY(top - PADT); for (const l of this.par) for (const im of l.imgs) { im.y = l.y0 + top; if (l.phoneOnly) im.setVisible(top > 0); }
 
     // zone blending follows the camera centre
     const w = this.world.zones.weights((camX + gw / 2) * K), lc = Math.round(w.cave * 16), lk = Math.min(16 - lc, Math.round(w.kelp * 16));
@@ -242,12 +262,12 @@ class Main extends Phaser.Scene {
     // diver
     const moving = Math.abs(this.vx) > 12;
     this.diver.setPosition(Math.round(this.x / K), Math.round(this.y / K)).setFlipX(this.facing < 0)
-      .setFrame(this.vy < -60 ? 4 : this.vy > 90 ? 5 : Math.floor(t * (moving ? 9 : 3)) % 4);
+      .setFrame(this.vy < -60 ? 4 : this.vy > 90 ? 5 : Math.floor(t * (this.boosting ? 16 : moving ? 9 : 3)) % 4);
     const dx = Math.round(this.x / K), dy = Math.round(this.y / K);
     this.diver.setVisible(!(this.invuln > 0 && Math.floor(t * 12) % 2 === 0));
     this.updateBubbles(dt, dx, dy);
     this.dbub.forEach(b => { b.age += dt; if (b.age > 4.2) { b.age = 0; this.emitted++; } const k = b.age; b.img.setPosition(Math.round(dx + this.facing * 11 + Math.sin(k * 3 + b.ph) * 1.5), Math.round(dy - 7 - k * 14)).setVisible(k > 0.01 && dy - 7 - k * 14 > SURF); });
-    this.bubs.forEach(b => { b.y -= b.sp * dt; if (b.y < SURF) { b.y = GH + 4; b.x = Math.random() * gw; } b.img.setPosition(Math.round(b.x + Math.sin(t * 2 + b.ph) * 1.5), Math.round(b.y)).setVisible(b.x < gw); });
+    this.bubs.forEach(b => { b.y -= b.sp * dt; if (b.y < SURF) { b.y = this.gh - top + 4; b.x = Math.random() * gw; } b.img.setPosition(Math.round(b.x + Math.sin(t * 2 + b.ph) * 1.5), Math.round(b.y) + top).setVisible(b.x < gw && b.y < this.gh - top); });
 
     HUD.draw({ dist: Math.round(this.x / 10), found: this.found.size, total: this.world.shrines.length, hearts: this.hearts, stamina: this.stam, boosting: this.boosting, lock: this.lock, blink: this.invuln > 0 && Math.floor(t * 8) % 2 === 0 });
   }
@@ -290,6 +310,7 @@ class Main extends Phaser.Scene {
         return { textures: { count, megaPixels: +(px / 1e6).toFixed(2), maxSide }, live: { segments: this.live.size, creatures: this.creatures.length, displayObjects: this.children.length },
           shrines: this.world.shrines.map(s => ({ mount: s.mount, zone: s.zone, step: s.step, accent: s.accent })), gates: this.world.gates.length,
           boost: { stamina: +this.stam.toFixed(3), boosting: this.boosting, lock: this.lock, invuln: +this.invuln.toFixed(2), emitted: this.emitted, activeBubbles: this.bpool.filter(b => b.on).length },
+          view: { phone: VIEW.phone, gw: this.gw, gh: this.gh, top: VIEW.top, camX: Math.round(this.camX), diverScreen: [Math.round(this.x / K - this.cameras.main.scrollX), Math.round(this.y / K - this.cameras.main.scrollY)], canvas: (() => { const r = this.game.canvas.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })(), diver: [Math.round(this.x / K), Math.round(this.y / K)] },
           onScreenKinds: [...new Set(this.creatures.filter(c => c.img.x > this.cameras.main.scrollX && c.img.x < this.cameras.main.scrollX + this.gw).map(c => c.f.sheet.replace(/\d$|_.*$/, '')))] };
       } });
   }
@@ -297,9 +318,15 @@ class Main extends Phaser.Scene {
 
 let BOOT = null;
 loadRepos().then(res => {
-  BOOT = res;
-  const game = new Phaser.Game({ type: Phaser.AUTO, width: computeGW(), height: GH, parent: 'game', backgroundColor: '#3d758e', pixelArt: true, roundPixels: true,
+  BOOT = res; VIEW = computeView();
+  const game = new Phaser.Game({ type: Phaser.AUTO, width: VIEW.gw, height: VIEW.gh, parent: 'game', backgroundColor: '#3d758e', pixelArt: true, roundPixels: true,
     input: { keyboard: false, mouse: false, touch: false, gamepad: false }, scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: [Main] });
-  const fit = () => { const gw = computeGW(); if (game.scale.gameSize.width !== gw) game.scale.setGameSize(gw, GH); };
-  addEventListener('resize', fit); addEventListener('orientationchange', fit);
+  // recompute on every kind of viewport change: window resize, rotation, the URL bar sliding in/out (visualViewport), and a hybrid device switching to touch
+  const fit = () => {
+    VIEW = computeView();
+    if (game.scale.gameSize.width !== VIEW.gw || game.scale.gameSize.height !== VIEW.gh) game.scale.setGameSize(VIEW.gw, VIEW.gh); else game.scale.refresh();
+    const scn = game.scene.getScene('Main'); if (scn && scn.sys.isActive()) scn.snap = true;
+  };
+  for (const ev of ['resize', 'orientationchange', 'dd:touch']) addEventListener(ev, fit);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
 }).catch(e => { $('loading-text').textContent = 'COULD NOT LOAD THE WORLD'; console.error(e); });

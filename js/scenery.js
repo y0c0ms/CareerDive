@@ -1,6 +1,9 @@
 // Scenery: sprite library (built once, size independent of the world), zone-blended backdrops and the painter
 // that composes a 512-px world segment from library sprites. Segments are repainted into a small pool of canvases.
 const SEG_W = 512, SEG_POOL = 4, TILE_W = 1024, GW_MIN = 480, GW_MAX = 1024;
+// Tall (phone) views show extra rows above the sky line and below the seabed. Segment canvases and the backdrop therefore carry PADT rows above
+// world row 0 and PADB rows below row GH; the world proper (rows 0..GH-1, everything physics knows about) is unchanged.
+const PADT = 72, PADB = 110, SEGH = PADT + GH + PADB;
 
 // ---- 3x5 pixel font for labels
 const FONT = {
@@ -97,17 +100,18 @@ function tintBack(ctx, x0, zones) {                     // world-anchored: tint 
   const cave = new Float32Array(SEG_W), kelp = new Float32Array(SEG_W); let any = false;
   for (let x = 0; x < SEG_W; x++) { const w = zones.weights((x0 + x) * K); cave[x] = w.cave; kelp[x] = w.kelp; if (w.cave > 0.01 || w.kelp > 0.01) any = true; }
   if (!any) return;
-  const id = ctx.getImageData(0, 0, SEG_W, GH);
-  if (tintPixels(new Uint32Array(id.data.buffer), SEG_W, GH, 0, cave, kelp, x0)) ctx.putImageData(id, 0, 0);
+  const id = ctx.getImageData(0, 0, SEG_W, SEGH);          // raw canvas rows: row 0 is world row -PADT
+  if (tintPixels(new Uint32Array(id.data.buffer), SEG_W, SEGH, -PADT, cave, kelp, x0)) ctx.putImageData(id, 0, 0);
 }
 
 // ---- zone backdrops (water + sky/ceiling), identical size for the three zones so they can be blended
 let stepWobTile = null;                                  // 128x64 tile (divides the 1024 texture), row shift of a step edge: smooth along x plus 1-px jitter
-function makeBackdrop(W, H, seed, zone) {
-  const nz = makeNoise(seed), cv = mkCanvas(W, H), Z = zoneColours(zone), span = H - SURF;
+function makeBackdrop(W, H, seed, zone) {              // H = PADT + GH: canvas row y is world row y - PADT; the extra top rows continue the sky / cave rock
+  const nz = makeNoise(seed), cv = mkCanvas(W, H), Z = zoneColours(zone), span = GH - SURF;
   if (!stepWobTile) { const wn = makeNoise(53); stepWobTile = new Float32Array(128 * 64); for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) stepWobTile[y * 128 + x] = (wn.fbm(x / 8, y / 4, 2, 16, 16) - 0.5) * 2.6 + (hashN(x, y, 53) - 0.5) * 0.9; }
   const wob = (x, y) => stepWobTile[((y & 63) << 7) | (x & 127)];
   paint(cv, (x, y) => {
+    y -= PADT;
     if (y < SURF) {
       if (zone === 'cave') { const v = nz.fbm(x / 8, y / 5, 3, W / 8); return v > 0.62 ? PAL.rock[1] : v > 0.3 ? PAL.rock[0] : PAL.midRock[0]; }
       return Z.sky[Math.max(0, Math.min(4, Math.floor((y + wob(x, y)) / (SURF - 2) * 5)))];
@@ -115,7 +119,19 @@ function makeBackdrop(W, H, seed, zone) {
     const v = (y - SURF + wob(x, y)) / span, hzv = sstep(0.55, 0.88, v + (nz.fbm(x / W * 6, v * 3, 3, 6, 3) - 0.5) * 0.3) * 0.95, hi = Math.round(hzv / 0.95 * 3);
     return hi ? Z.haze[hi] : Z.water[Math.round(sstep(0, 0.3, v) * 4)];
   });
-  return tintVariant(cv, zone, 0);
+  return tintVariant(cv, zone, -PADT);
+}
+// bedrock under the sand for tall views: mirrored sand rows fade out (blue-noise dither) into dark strata; the tile scrolls with the world
+function makeSeabedExt(W, H, sand) {
+  const nz = makeNoise(131), R = PAL.rock, cv = mkCanvas(W, H);
+  paint(cv, (x, y) => {
+    const deep = sstep(0, H * 0.8, y), b = nz.fbm(x / 26, y / 3.4, 3, W / 26), c = nz.n2(x / 5, y / 2.2 + 11);
+    if (c > 0.86 - 0.1 * (1 - deep) && b > 0.45) return R[2];
+    const v = b + 0.18 * (1 - deep) + (nz.n2(x / 3, y / 3 + 40) - 0.5) * 0.12;
+    return v > 0.7 ? R[2] : v > 0.46 ? R[1] : R[0];
+  });
+  for (let j = 0; j < 36 && j < H; j++) cv.x.drawImage(sand.c, 0, 35 - j, W, 1, 0, j, W, 1);
+  return cv;
 }
 function hazeRamp(zone) {
   const H = PAL.haze;
@@ -207,7 +223,7 @@ function buildLibrary() {
   const tinyKelp = [coralBranch('mintree', 31, 0.3), coralBranch('whip', 33, 0.3), coralBranch('yellow', 34, 0.3), coralBranch('spray', 35, 0.3), makeAnemone(10, 10, 8, PAL.teal), makeTubes(9, 7, 10, PAL.teal)];
   const tinyCave = [coralBranch('spray', 35, 0.3), coralBranch('mintree', 31, 0.3), makeAnemone(10, 10, 8, PAL.purple)];
   const ZN = ['reef', 'kelp', 'cave'];
-  L.backdrop = ZN.map((z, i) => makeBackdrop(TILE_W, GH, 3 + i * 5, z));
+  L.backdrop = ZN.map((z, i) => makeBackdrop(TILE_W, PADT + GH, 3 + i * 5, z));
   L.haze = ZN.map((z, i) => tintVariant(makeHaze(TILE_W, 165, 5 + i, { base: 0.22, amp: 0.35, lumps: 30, ramp: hazeRamp(z) }), z, 105));
   L.mid = [makeMidReef(TILE_W, 78, 9, tiny, 130), makeMidReef(TILE_W, 78, 12, tinyKelp, 70), makeMidReef(TILE_W, 78, 14, tinyCave, 16)].map((c, i) => tintVariant(c, ZN[i], 173));
   L.clouds = makeClouds(TILE_W, 44, 17); L.surface = ZN.map(z => tintVariant(makeSurfaceStrip(TILE_W, z), z, SURF - 2));
@@ -216,7 +232,7 @@ function buildLibrary() {
   const caustic = (h, seed, o) => { const c = makeCaustic(TILE_W, h, seed, o); return [c, c, mkCanvas(TILE_W, h)]; };
   L.shaftsA = shafts(7, 5, 0.26); L.shaftsB = shafts(19, 5, 0.38);
   L.causA = caustic(50, 1, { cx: 28, cy: 2, th: 1.9, fade: 1, glow: 0.55 }); L.causB = caustic(44, 11, { cx: 22, cy: 2, th: 1.5, fade: 1, glow: 0.4 });
-  L.sand = makeSand(TILE_W, 36, 4, 32, 3, 10);
+  L.sand = makeSand(TILE_W, 36, 4, 32, 3, 10); L.seabedExt = makeSeabedExt(TILE_W, PADB, L.sand);
 
   const small = { reef: [], kelp: [], cave: [] };
   kinds.forEach((k, i) => { small.reef.push(coralBranch(k, 200 + i, 0.4), coralBranch(k, 220 + i, 0.62)); });

@@ -314,14 +314,27 @@ function bubbleStep(bs,t,dt,W,H){
 const DIVER_PAL={k:'#2a3428',y:'#e4a830',Y:'#c0600c',b:'#3c3cc0',l:'#6084e4',d:'#182490',g:'#b3cbb6',s:'#e89096'};
 const DIVER_BODY=["..........................","...........kkkk...kkkkk...","..........kyyyYk.kddddk...","..........kyyyYkkdggggk...",".........kkyyyYkdgggggk...",
   "....kkkkkbbYYYbbkdggssk...","..kkllllbbbbbbbbbkddddkk..",".kddddddddbbbbbbbbbbbbkkk.","..kkkkkkkkddddddbbbbbbssk.","...........kkkkkkkkkkkk...","..........................."];
-const DIVER_FINS=[["kyyk.","kYyk.",".kk.."],[".kyyk","kkYyk","....."],["kyyk.",".....","kYyk."],[".....",".kyyk","kkYyk"]];
+// big flippers: two blades (the far one darker) that flare towards the tip and kick in a scissor cycle. The body sprite is padded so they fit
+// (DIVER_PADX columns left and right keep the body centred in the frame, DIVER_PADY rows above and below).
+const DIVER_PADX=10, DIVER_PADY=3, DIVER_KICK=[-2.6,-0.7,2.6,0.7];
+function drawFin(g,ax,ay,len,tip,tilt,main,shade){   // blade grows from the ankle (ax,ay) to the left; tip = half height at the tip, tilt = tip offset in rows
+  const cells=new Map(); for(let i=0;i<=len;i++){ const t=i/len, cy=ay+tilt*t*t, hw=0.6+(tip-0.6)*Math.pow(t,0.85), x=ax-i;
+    for(let y=Math.floor(cy-hw-0.5);y<=Math.ceil(cy+hw+0.5);y++) if(Math.abs(y-cy)<=hw+0.25) cells.set(x+','+y,[x,y,y>=cy+hw-0.55,Math.abs(y-cy)<0.5&&i%3===1]); }
+  const at=(x,y)=>cells.has(x+','+y);
+  cells.forEach(([x,y,low,rib])=>{ if(g[y]&&g[y][x]!==undefined) g[y][x]=low||rib?shade:main; });
+  cells.forEach(([x,y])=>{ for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) if(!at(x+dx,y+dy)&&g[y+dy]&&g[y+dy][x+dx]==='.') g[y+dy][x+dx]='k'; });
+}
 function tiltSprite(cv,slope,pad){ const out=mkCanvas(cv.w,cv.h+pad*2);
   for(let x=0;x<cv.w;x++) out.x.drawImage(cv.c,x,0,1,cv.h,x,pad-Math.round(slope*(x-cv.w/2)),1,cv.h);
   return out; }
-function makeDiver(){ const body=DIVER_BODY.map(r=>r.split('')), frames=[];
-  DIVER_FINS.forEach(fin=>{ const g=body.map(r=>r.slice()); fin.forEach((row,i)=>{ for(let x=0;x<row.length;x++) if(row[x]!=='.') g[5+i][x]=row[x]; });
+function makeDiver(){ const W=DIVER_BODY[0].length+2*DIVER_PADX, Hh=DIVER_BODY.length+2*DIVER_PADY, frames=[];
+  const base=Array.from({length:Hh},(_,y)=>{ const row=Array(W).fill('.'), src=DIVER_BODY[y-DIVER_PADY]; if(src) for(let x=0;x<src.length;x++) row[x+DIVER_PADX]=src[x]; return row; });
+  const ax=DIVER_PADX+2, ay=DIVER_PADY+7;
+  DIVER_KICK.forEach(k=>{ const g=base.map(r=>r.slice());
+    drawFin(g,ax-1,ay-2,9,2.2,-k*0.7-0.4,'Y','k');         // far flipper
+    drawFin(g,ax,ay,10,2.8,k,'y','Y');                     // near flipper
     frames.push(gridSprite(g.map(r=>r.join('')),DIVER_PAL)); });
-  const pad=8, big=tiltSprite(frames[1],0.6,pad), H=big.h, all=[];
+  const pad=12, big=tiltSprite(frames[1],0.6,pad), H=big.h, all=[];
   frames.forEach(f=>{ const c=mkCanvas(f.w,H); c.x.drawImage(f.c,0,pad); all.push(c); });
   all.push(big, tiltSprite(frames[0],-0.6,pad)); return all; }
 

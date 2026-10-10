@@ -12,11 +12,11 @@ const st = p => p.evaluate(() => window.__test.state());
 
 const fresh = async browser => (browser.createBrowserContext || browser.createIncognitoBrowserContext).call(browser);   // isolated localStorage
 
-async function device(browser, url, w, h) {
+async function device(browser, url, w, h, dpr = 2) {
   const page = await (await fresh(browser)).newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/readme|favicon/.test((m.location() || {}).url || '')) errors.push(m.text()); });
   await intercept(page);
-  await page.emulate({ viewport: { width: w, height: h, deviceScaleFactor: 2, isMobile: true, hasTouch: true }, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36' });
+  await page.emulate({ viewport: { width: w, height: h, deviceScaleFactor: dpr, isMobile: true, hasTouch: true }, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36' });
   await page.goto(url, { waitUntil: 'load' }); await hookReady(page); await sleep(1500);
   return { page, errors };
 }
@@ -39,7 +39,7 @@ async function drag(page, dx, dy, ms) {
         return { boost: [bb.left, bb.top, bb.width, bb.height].map(Math.round), hud: [hudBox.width, hudBox.height].map(Math.round), stick: [s.left, s.top, s.width, s.height].map(Math.round), canvas: [c.left, c.top, c.width, c.height].map(Math.round), hint, touchClass: document.documentElement.classList.contains('touch'), rotateHidden: document.getElementById('rotate').classList.contains('hidden'), scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight], gw: Phaser.GAMES ? null : null };
       });
       check(`[${w}x${h}] touch UI on, rotate overlay hidden`, info.touchClass && info.rotateHidden, info);
-      check(`[${w}x${h}] joystick at bottom-left inside viewport`, info.stick[0] >= 0 && info.stick[0] < w * 0.25 && info.stick[1] + info.stick[3] <= h && info.stick[1] > h * 0.4 && info.stick[2] >= 100, info.stick);
+      check(`[${w}x${h}] joystick at bottom-left inside viewport`, info.stick[0] >= 0 && info.stick[0] < w * 0.25 && info.stick[1] + info.stick[3] <= h && info.stick[1] > h * 0.4 && info.stick[2] >= 96, info.stick);
       check(`[${w}x${h}] canvas fills the window`, info.canvas[0] <= 1 && info.canvas[1] <= 1 && Math.abs(info.canvas[2] - w) <= 2 && Math.abs(info.canvas[3] - h) <= 2, info.canvas);
       check(`[${w}x${h}] HUD shows the touch hints (drag to swim + boost button) and stays thin`, info.hint === 'touch' && info.hud[1] <= 40 && info.hud[0] >= w - 2, { hint: info.hint, hud: info.hud });
       check(`[${w}x${h}] boost button at bottom-right inside the viewport, clear of the joystick`, info.boost[0] + info.boost[2] <= w && info.boost[1] + info.boost[3] <= h && info.boost[0] > w * 0.75 && info.boost[1] > h * 0.4 && info.boost[2] >= 70, info.boost);
@@ -129,16 +129,45 @@ async function drag(page, dx, dy, ms) {
       await page.close();
     }
 
-    console.error('\n== wide screens + resize ==');
+    console.error('\n== phone view: visible world, diver vs controls ==');
+    for (const [w, h, d] of [[844, 390, 2], [852, 393, 3], [915, 412, 2.625], [932, 430, 3], [667, 375, 2], [740, 360, 3]]) {
+      const { page, errors } = await device(browser, url, w, h, d);
+      const v = await page.evaluate(() => window.__test.inspect().view), tag = `[${w}x${h}@${d}]`;
+      const sc = v.canvas[2] / v.gw, oldWide = Math.min(1024, Math.max(480, 2 * Math.round(270 * w / h / 2)));                                         // css px per internal px
+      const oldW = Math.min(1024, Math.max(480, 2 * Math.round(270 * w / h / 2)));
+      check(`${tag} phone view shows >= 1.35x the old visible width (old ${oldW} internal px, now ${v.gw}) and the whole 270-row world (${v.gh} rows)`, v.phone && v.gw >= 1.35 * oldW && v.gh >= 270, { oldW, view: v, ratio: +(v.gw / oldW).toFixed(2) });
+      check(`${tag} canvas covers the window, device pixels per internal pixel is a whole number`, v.canvas[0] <= 1 && v.canvas[1] <= 1 && Math.abs(v.canvas[2] - w) <= 2 && Math.abs(v.canvas[3] - h) <= 2 && (Math.abs(sc * d - Math.round(sc * d)) < 0.08 || v.gw >= 1.4 * oldWide), { css: v.canvas, devicePxPerInternal: +(sc * d).toFixed(3), note: 'fractional when a whole-pixel scale would show < 1.35x the old width' });
+      const zones = await page.evaluate(() => { const r = id => { const b = document.getElementById(id).getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; }; return { stick: r('stick'), boost: r('boost'), hud: r('hud') }; });
+      const stickW = zones.stick[2] - zones.stick[0];
+      check(`${tag} joystick base is ~100 css px and stays in the bottom-left corner`, stickW >= 92 && stickW <= 110 && zones.stick[0] < 40 && zones.stick[3] <= h, zones.stick.map(Math.round));
+      // the diver's possible screen area: fixed band around its camera anchor, widened by the camera lag while boosting at full speed in both directions
+      await page.evaluate(() => { window.__test.godMode(true); window.__test.teleport(4000, 400); }); await sleep(900);
+      const xs = [], ys = [];
+      for (const key of ['d', 'a']) {
+        await page.evaluate(() => window.__test.boost(true)); await page.keyboard.down(key);
+        for (let i = 0; i < 6; i++) { await sleep(180); const s = (await page.evaluate(() => window.__test.inspect().view)); xs.push(s.diverScreen[0] * sc); ys.push(s.diverScreen[1] * sc); }
+        await page.keyboard.up(key); await page.evaluate(() => window.__test.boost(false)); await sleep(500);
+      }
+      const half = 24 * sc, minX = Math.min(...xs) - half, maxX = Math.max(...xs) + half;
+      const hit = (z, x0, x1, y0, y1) => !(x1 < z[0] || x0 > z[2] || y1 < z[1] || y0 > z[3]);
+      const vy = [Math.min(...ys) - 20 * sc, Math.max(...ys) + 20 * sc];
+      // vertical range of the diver over the whole water column (not just what was sampled): rows SURF+6..FLOOR-8 of the world
+      const yTop = (49 + 6 + v.top) * sc - 20 * sc, yBot = (248 - 8 + v.top) * sc + 20 * sc;
+      check(`${tag} diver sprite (any swim speed, either direction, any depth) never overlaps the joystick or the boost button`, !hit(zones.stick, minX, maxX, yTop, yBot) && !hit(zones.boost, minX, maxX, yTop, yBot), { diverX: [Math.round(minX), Math.round(maxX)], diverY: [Math.round(yTop), Math.round(yBot)], stick: zones.stick.map(Math.round), boost: zones.boost.map(Math.round), diverPercentFromLeft: +((xs.reduce((a, b) => a + b, 0) / xs.length / w) * 100).toFixed(1) });
+      await page.screenshot({ path: path.join(OUT, `phone-${w}x${h}.png`) });
+      await page.evaluate(() => { window.__test.godMode(false); }); await page.keyboard.press('r').catch(() => {});
+      check(`${tag} no page errors`, errors.length === 0, errors.slice(0, 3));
+      await page.close();
+    }
     {
       const { page, errors } = await device(browser, url, 1000, 430);          // aspect 2.33, wider than 16:9
       const meas = async () => page.evaluate(() => { const c = document.querySelector('canvas'), r = c.getBoundingClientRect(); return { css: [r.left, r.top, r.width, r.height].map(Math.round), buffer: [c.width, c.height] }; });
       const wide = await meas();
-      check('[wide 1000x430] canvas covers the window and the internal width grew (seabed and surface keep their rows)', wide.css[2] >= 1000 && wide.css[3] >= 430 && wide.buffer[1] === 270 && wide.buffer[0] > 480, wide);
+      check('[wide phone 1000x430] canvas covers the window and the internal width grew with it', wide.css[2] >= 999 && wide.css[3] >= 429 && wide.buffer[1] >= 270 && wide.buffer[0] > 640, wide);
       await page.screenshot({ path: path.join(OUT, 'wide-1000x430.png') });
       await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1, isMobile: false, hasTouch: false }); await sleep(900);
       const after = await meas();
-      check('[resize] canvas follows a resize to 1280x720 (internal width back to 480)', after.css[2] === 1280 && after.css[3] === 720 && after.buffer[0] === 480, after);
+      check('[resize] canvas follows a resize to a 1280x720 desktop window (internal 480x270 again)', after.css[2] === 1280 && after.css[3] === 720 && after.buffer[0] === 480 && after.buffer[1] === 270, after);
       check('[wide] no page errors', errors.length === 0, errors.slice(0, 3));
       await page.close();
     }

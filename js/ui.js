@@ -14,7 +14,7 @@ const UI = {
 // ---------- touch / orientation
 (function initTouch() {
   const coarse = matchMedia('(pointer: coarse)'), root = document.documentElement;
-  const apply = () => { root.classList.toggle('touch', UI.touch); HUD.setTouch(UI.touch); };
+  const apply = () => { root.classList.toggle('touch', UI.touch); HUD.setTouch(UI.touch); dispatchEvent(new Event('dd:touch')); };
   const orient = () => { UI.portrait = innerHeight > innerWidth; $('rotate').classList.toggle('hidden', !UI.paused); if (!UI.paused) { resetStick(); resetBoost(); } };
   // joystick: analog, one tracked pointer so other fingers (popup, restart tap) stay independent
   const base = $('stick'), knob = $('stick-knob'); let pid = null, cx = 0, cy = 0, R = 40;

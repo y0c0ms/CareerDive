@@ -2,6 +2,7 @@
 // hash(WORLD_SEED, segment index); only shrines and gates (from world.js) depend on the repo list.
 const ceilNz = makeNoise(77);
 const lerp = (a, b, t) => a + (b - a) * t;
+const CEIL_NONE = -1000;
 
 class Scenery {
   constructor(world, lib) {
@@ -9,11 +10,13 @@ class Scenery {
     this.shrineX = world.shrines.map(s => s.x / K);
     this.nSeg = Math.ceil(world.W / K / SEG_W);
   }
-  // ---- ceiling of the cave zone (internal px): -1 = none
+  // ---- ceiling of the cave zone (internal px): CEIL_NONE = none. Rows < 0 only show in tall (phone) views: there the ceiling slides up out of the extra sky rows
   ceilBottom(x) {
     const t = sstep(0.02, 0.85, this.world.zones.weights(x * K).cave);
-    if (t <= 0) return -1;
-    return Math.round(lerp(-6, SURF + 3 + (ceilNz.fbm(x / 16, 2.2, 2) - 0.5) * 7, t));
+    if (t <= 0) return CEIL_NONE;
+    const target = SURF + 3 + (ceilNz.fbm(x / 16, 2.2, 2) - 0.5) * 7, b = lerp(-6, target, t);
+    if (b >= 0) return Math.round(b);
+    return -Math.round((PADT + 1) * (1 - t * (target + 6) / 6));
   }
   nearShrine(x, pad) {
     const xs = this.shrineX; let lo = 0, hi = xs.length;
@@ -135,10 +138,11 @@ class Scenery {
   // ---- painting
   paintBack(s, ctx) {
     const x0 = s * SEG_W, lib = this.lib, world = this.world;
-    ctx.clearRect(0, 0, SEG_W, GH);
+    ctx.setTransform(1, 0, 0, 1, 0, PADT); ctx.clearRect(0, -PADT, SEG_W, SEGH);          // canvas row 0 is world row -PADT
     ctx.drawImage(lib.sand.c, (s & 1) * SEG_W, 0, SEG_W, 36, 0, GH - 36, SEG_W, 36);
+    ctx.drawImage(lib.seabedExt.c, (s & 1) * SEG_W, 0, SEG_W, PADB, 0, GH, SEG_W, PADB);
     // cave ceiling
-    let any = false; for (let x = 0; x < SEG_W; x += 16) if (this.ceilBottom(x0 + x) >= 0) { any = true; break; }
+    let any = false; for (let x = 0; x < SEG_W; x += 16) if (this.ceilBottom(x0 + x) > -PADT) { any = true; break; }
     if (any) this.paintCeiling(x0, ctx);
     for (const n of [s - 1, s, s + 1]) {
       if (n < 0 || n >= this.nSeg) continue;
@@ -148,18 +152,37 @@ class Scenery {
       const st = sh.stone; if (st.x + st.w + 40 < x0 || st.x - 40 > x0 + SEG_W) continue;
       this.paintShrine(sh, x0, ctx);
     }
+    this.paintWalls(x0, ctx);
     tintBack(ctx, x0, world.zones);          // cave darkening / kelp green, baked into the world-anchored pixels (flat steps, no screen-space dither)
   }
+  // beyond both ends of the world the view (which may scroll past them on phones, to keep the diver off the controls) shows a rock cliff
+  paintWalls(x0, ctx) {
+    const Wi = this.world.W / K;
+    if (x0 >= 0 && x0 + SEG_W <= Wi - 12) return;
+    const R = PAL.rock, M = PAL.moss, cv = mkCanvas(SEG_W, SEGH), nz = ceilNz;
+    const edge = (y, right) => right ? Wi + 4 + Math.round(nz.fbm(y / 9, 6.1, 2) * 9) : -4 - Math.round(nz.fbm(y / 9, 1.7, 2) * 9);
+    paint(cv, (x, yy) => {
+      const wx = x0 + x, y = yy - PADT, right = wx > Wi / 2, e = edge(y, right);
+      if (right ? wx < e : wx > e) return null;
+      const dd = right ? wx - e : e - wx;
+      if (dd < 1) return R[0];
+      if (dd < 3 && nz.n2(y / 3, wx / 3) < 0.7) return R[3];
+      const v = nz.fbm(wx / 9, y / 6, 3) + 0.08 * Math.min(6, dd) / 6 - 0.12 * (dd > 30 ? 1 : 0);
+      if (y > GH - 36 && y < GH + 4) return v > 0.62 ? R[2] : R[1];
+      return v > 0.74 ? R[3] : v > 0.62 ? R[2] : v > 0.44 ? R[1] : R[0];
+    });
+    ctx.drawImage(cv.c, 0, -PADT);
+  }
   paintCeiling(x0, ctx) {
-    const R = PAL.rock, cv = mkCanvas(SEG_W, SURF + 12), nz = ceilNz;
-    paint(cv, (x, y) => {
-      const b = this.ceilBottom(x0 + x); if (b < 0 || y > b) return null;
+    const R = PAL.rock, cv = mkCanvas(SEG_W, PADT + SURF + 12), nz = ceilNz;
+    paint(cv, (x, yy) => {
+      const y = yy - PADT, b = this.ceilBottom(x0 + x); if (y > b) return null;
       const d = b - y; if (d === 0) return R[0];
       if (d === 1) return R[1];
       const v = nz.fbm((x0 + x) / 8, y / 4, 3) + 0.12 * (d / 12);
       return v > 0.8 ? R[2] : v > 0.52 ? R[1] : R[0];
     });
-    ctx.drawImage(cv.c, 0, 0);
+    ctx.drawImage(cv.c, 0, -PADT);
   }
   paintShrine(sh, x0, ctx) {
     const st = sh.stone, spr = this.stone(sh), lx = st.x - x0, cx = lx + Math.round(st.w / 2);
@@ -177,18 +200,26 @@ class Scenery {
   }
   paintFront(s, ctx) {
     const x0 = s * SEG_W, world = this.world;
-    ctx.clearRect(0, 0, SEG_W, GH);
+    ctx.setTransform(1, 0, 0, 1, 0, PADT); ctx.clearRect(0, -PADT, SEG_W, SEGH);
     for (const n of [s - 1, s, s + 1]) {
       if (n < 0 || n >= this.nSeg) continue;
       for (const it of this.items(n).front) if (it.x + it.w > x0 && it.x < x0 + SEG_W) stamp(ctx, it.spr, it.x - x0, it.y, it.flip);
     }
     world.gates.forEach((g, gi) => {
       const gx = Math.round(g.x / K), gw = Math.round(g.w / K); if (gx + gw < x0 || gx > x0 + SEG_W) return;
-      stamp(ctx, this.pillar(g, gi, true), gx - x0, 0, false);
+      const top = this.pillar(g, gi, true);
+      stamp(ctx, top, gx - x0, 0, false); extendMirrored(ctx, top, gx - x0, 0, PADT, -1);        // the pillars run on into the extra rows of tall views
       const bottom = this.pillar(g, gi, false), by = Math.round(g.gapBottom / K);
-      stamp(ctx, bottom, gx - x0, by, false);
+      stamp(ctx, bottom, gx - x0, by, false); extendMirrored(ctx, bottom, gx - x0, by + bottom.h, PADB, 1);
       const r = this.lib.pebbles[gi % 3]; stamp(ctx, r, gx - x0 - 5, GH - 12, false); stamp(ctx, this.lib.pebbles[(gi + 1) % 3], gx - x0 + gw - 8, GH - 10, true);
     });
+  }
+}
+// repeat a sprite past its edge by mirroring its nearest rows (dir -1: above edgeY, dir 1: below edgeY), seamless for stone
+function extendMirrored(ctx, spr, x, edgeY, n, dir) {
+  for (let j = 0; j < n; j++) {
+    const r = j % (2 * spr.h), k = r < spr.h ? r : 2 * spr.h - 1 - r, sy = dir < 0 ? k : spr.h - 1 - k;
+    ctx.drawImage(spr.c, 0, sy, spr.w, 1, Math.round(x), dir < 0 ? edgeY - 1 - j : edgeY + j, spr.w, 1);
   }
 }
 function makeLedgeRock(w, h, seed) { return makeRock(w, h, 900 + seed * 7, { bumps: 2, steep: 0.35, moss: 0.3, cracks: 3 }); }
