@@ -41,6 +41,7 @@ const UI = {
     UI.boostBtn = true; HUD.drawBoostButton(true); e.preventDefault();
   });
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) bbtn.addEventListener(t, e => { if (e.pointerId === bid) resetBoost(); });
+  UI.releaseControls = () => { resetStick(); resetBoost(); };
 
   UI.touch = coarse.matches; apply(); orient();
   coarse.addEventListener('change', e => { UI.touch = e.matches; apply(); orient(); });
@@ -162,7 +163,7 @@ modal.open = function (repo) {
   const link = $('modal-link'); link.href = repo.html_url; link.textContent = 'open on GitHub ↗';
   const rd = $('modal-readme'); rd.textContent = 'loading README…'; rd.scrollTop = 0;
   $('modal').classList.remove('has-hero'); $('modal-hero').textContent = ''; $('modal-hero').classList.remove('ready');
-  $('modal').classList.remove('hidden');
+  $('modal').classList.remove('hidden'); document.documentElement.classList.add('modal-open'); UI.releaseControls();
   loadReadme(repo).then(res => {
     if (tok !== modal.token) return;                      // the player moved on
     if (res.none) rd.textContent = 'No README';
@@ -171,6 +172,6 @@ modal.open = function (repo) {
     rd.scrollTop = 0;
   });
 };
-modal.close = function () { modal.token++; modal.repo = null; $('modal').classList.add('hidden'); const v = $('modal-hero').querySelector('video'); if (v) v.pause(); $('modal-hero').textContent = ''; $('modal').classList.remove('has-hero'); };
+modal.close = function () { modal.token++; modal.repo = null; $('modal').classList.add('hidden'); document.documentElement.classList.remove('modal-open'); const v = $('modal-hero').querySelector('video'); if (v) v.pause(); $('modal-hero').textContent = ''; $('modal').classList.remove('has-hero'); };
 modal.isOpen = () => !$('modal').classList.contains('hidden');
 $('modal-close').addEventListener('click', () => { if (UI.onClose) UI.onClose(); });

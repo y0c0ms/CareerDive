@@ -133,10 +133,11 @@ async function drag(page, dx, dy, ms) {
     for (const [w, h, d] of [[844, 390, 2], [852, 393, 3], [915, 412, 2.625], [932, 430, 3], [667, 375, 2], [740, 360, 3]]) {
       const { page, errors } = await device(browser, url, w, h, d);
       const v = await page.evaluate(() => window.__test.inspect().view), tag = `[${w}x${h}@${d}]`;
-      const sc = v.canvas[2] / v.gw, oldWide = Math.min(1024, Math.max(480, 2 * Math.round(270 * w / h / 2)));                                         // css px per internal px
-      const oldW = Math.min(1024, Math.max(480, 2 * Math.round(270 * w / h / 2)));
-      check(`${tag} phone view shows >= 1.35x the old visible width (old ${oldW} internal px, now ${v.gw}) and the whole 270-row world (${v.gh} rows)`, v.phone && v.gw >= 1.35 * oldW && v.gh >= 270, { oldW, view: v, ratio: +(v.gw / oldW).toFixed(2) });
-      check(`${tag} canvas covers the window, device pixels per internal pixel is a whole number`, v.canvas[0] <= 1 && v.canvas[1] <= 1 && Math.abs(v.canvas[2] - w) <= 2 && Math.abs(v.canvas[3] - h) <= 2 && (Math.abs(sc * d - Math.round(sc * d)) < 0.08 || v.gw >= 1.4 * oldWide), { css: v.canvas, devicePxPerInternal: +(sc * d).toFixed(3), note: 'fractional when a whole-pixel scale would show < 1.35x the old width' });
+      const sc = v.canvas[2] / v.gw;                                          // css px per internal px
+      const oldW = Math.min(1024, Math.max(480, 2 * Math.round(270 * w / h / 2)));             // the original (pre-phone-view) visible width
+      const prevW = { '844x390': 844, '852x393': 852, '915x412': 870, '932x430': 932, '667x375': 668, '740x360': 804 }[`${w}x${h}`];   // the previous phone view
+      check(`${tag} phone view: ~0.9x the previous visible width (${prevW} -> ${v.gw} internal px), still >= 1.2x the original ${oldW}, whole 270-row world visible (${v.gh} rows)`, v.phone && Math.abs(v.gw / prevW - 0.9) <= 0.035 && v.gw >= 1.2 * oldW && v.gh >= 270, { oldW, prevW, view: v, ratioToPrev: +(v.gw / prevW).toFixed(3), ratioToOriginal: +(v.gw / oldW).toFixed(2) });
+      check(`${tag} canvas covers the window (${(sc * d).toFixed(2)} device px per internal px)`, v.canvas[0] <= 1 && v.canvas[1] <= 1 && Math.abs(v.canvas[2] - w) <= 2 && Math.abs(v.canvas[3] - h) <= 2, { css: v.canvas });
       const zones = await page.evaluate(() => { const r = id => { const b = document.getElementById(id).getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; }; return { stick: r('stick'), boost: r('boost'), hud: r('hud') }; });
       const stickW = zones.stick[2] - zones.stick[0];
       check(`${tag} joystick base is ~100 css px and stays in the bottom-left corner`, stickW >= 92 && stickW <= 110 && zones.stick[0] < 40 && zones.stick[3] <= h, zones.stick.map(Math.round));

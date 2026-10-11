@@ -22,7 +22,7 @@ const SHEET_DEFS = {
 const tri = p => { p -= Math.floor(p); return p < 0.5 ? 4 * p - 1 : 3 - 4 * p; };       // triangle wave -1..1, rising first
 // ---- view: desktop and tablets keep the classic 480+ x 270 internal view. On phones the picture is drawn at about one css pixel per internal pixel
 // (a whole number of device pixels), which shows ~1.45x more of the world; the extra rows are sky above and bedrock below the 270-row world.
-const PHONE_MAX_H = 560, TOP_FRAC = 0.4;
+const PHONE_MAX_H = 560, TOP_FRAC = 0.4, PHONE_ZOOM = 0.9;
 const vvSize = () => { const v = window.visualViewport; return { w: v ? v.width : innerWidth, h: v ? v.height : innerHeight }; };
 function computeView() {
   const { w: vw, h: vh } = vvSize();
@@ -30,7 +30,7 @@ function computeView() {
     const dpr = window.devicePixelRatio || 1, oldS = vh / GH;          // oldS: css px per internal px of the previous (classic) view
     // prefer a whole number of device pixels per internal pixel (perfectly crisp) when it shows at least 1.35x the old width, else zoom out to 1.45x
     let s = Math.max(1, Math.round(dpr)) / dpr; if (oldS / s < 1.35) s = oldS / 1.45;
-    s = Math.max(0.8, s);
+    s = Math.min(Math.max(0.8, s) / PHONE_ZOOM, vh / GH);          // PHONE_ZOOM: the scene is drawn 10 % closer than the first phone view; the whole 270 rows stay visible
     const gh = Math.max(GH, Math.min(GH + PADT + PADB, Math.round(vh / s))), gw = Math.min(GW_MAX, Math.max(GW_MIN, 2 * Math.round(vw / s / 2))), pad = gh - GH;
     const top = Math.min(PADT, pad, Math.max(Math.round(pad * TOP_FRAC), Math.ceil(30 / s)));
     return { phone: true, gw, gh, top };
@@ -143,7 +143,8 @@ class Main extends Phaser.Scene {
   step(dt) {
     const a = UI.axis(); this.updateBoost(dt, UI.boostHeld() || this.testBoost);
     const bm = this.boosting, ease = Math.min(1, dt * (bm ? 16 : 12));
-    const tvx = a.x * SPEED * (bm ? BOOST_X : 1), tvy = a.y ? a.y * VSPEED * (bm ? BOOST_Y : 1) : SINK;
+    const hover = this.popupIdx >= 0 && !a.y;                       // while a project popup is open the diver hovers instead of sinking out of its radius
+    const tvx = a.x * SPEED * (bm ? BOOST_X : 1), tvy = a.y ? a.y * VSPEED * (bm ? BOOST_Y : 1) : hover ? 0 : SINK;
     this.vx += (tvx - this.vx) * ease; this.vy += (tvy - this.vy) * ease;
     if (Math.abs(this.vx) < 2 && !a.x) this.vx = 0;
     this.x = Math.max(24, this.x + this.vx * dt); this.y += this.vy * dt;
