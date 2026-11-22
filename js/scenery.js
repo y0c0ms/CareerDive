@@ -269,6 +269,7 @@ class ZoneBlend {
   constructor(scene, key, variants) {
     this.w = variants[0].w; this.h = variants[0].h;
     this.src = variants.map(v => new Uint32Array(v.x.getImageData(0, 0, this.w, this.h).data.buffer.slice(0)));
+    if (scene.textures.exists(key)) scene.textures.remove(key);      // scene restarts re-run create(): replace, don't duplicate
     this.tex = scene.textures.createCanvas(key, this.w, this.h); this.ctx = this.tex.getContext();
     this.id = this.ctx.createImageData(this.w, this.h); this.out = new Uint32Array(this.id.data.buffer); this.key = -1;
   }

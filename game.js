@@ -71,7 +71,7 @@ class Main extends Phaser.Scene {
 
     // ---- world segment pool (two canvases per slot: behind and in front of the action)
     this.slots = Array.from({ length: SEG_POOL }, (_, i) => {
-      const mk = (key, depth) => { const tex = this.textures.createCanvas(key + i, SEG_W, SEGH); tex.context.imageSmoothingEnabled = false; return { tex, img: this.add.image(0, 0, key + i).setOrigin(0, 0).setDepth(depth).setVisible(false) }; };
+      const mk = (key, depth) => { if (this.textures.exists(key + i)) this.textures.remove(key + i); const tex = this.textures.createCanvas(key + i, SEG_W, SEGH); tex.context.imageSmoothingEnabled = false; return { tex, img: this.add.image(0, 0, key + i).setOrigin(0, 0).setDepth(depth).setVisible(false) }; };
       return { seg: -999, back: mk('segB', 4.5), front: mk('segF', 8) };
     });
 
@@ -327,9 +327,15 @@ loadRepos().then(res => {
     input: { keyboard: false, mouse: false, touch: false, gamepad: false }, scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: [Main] });
   // recompute on every kind of viewport change: window resize, rotation, the URL bar sliding in/out (visualViewport), and a hybrid device switching to touch
   const fit = () => {
+    const wasPhone = VIEW.phone;
     VIEW = computeView();
     if (game.scale.gameSize.width !== VIEW.gw || game.scale.gameSize.height !== VIEW.gh) game.scale.setGameSize(VIEW.gw, VIEW.gh); else game.scale.refresh();
-    const scn = game.scene.getScene('Main'); if (scn && scn.sys.isActive()) scn.snap = true;
+    const scn = game.scene.getScene('Main');
+    if (scn && scn.sys.isActive()) {
+      // the layers are built once from the size at create(), so a portrait <-> landscape flip needs a rebuild at the new size
+      if (VIEW.phone !== wasPhone) { KEEP_FOUND = scn.found; scn.scene.restart(); }
+      else scn.snap = true;
+    }
   };
   for (const ev of ['resize', 'orientationchange', 'dd:touch']) addEventListener(ev, fit);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
