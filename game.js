@@ -38,6 +38,7 @@ function computeView() {
   return { phone: false, gw: Math.min(GW_MAX, Math.max(GW_MIN, 2 * Math.round(GH * innerWidth / innerHeight / 2))), gh: GH, top: 0 };
 }
 let VIEW = computeView();
+let KEEP_FOUND = null;            // shrine progress carried across a portrait <-> landscape scene restart
 
 class Main extends Phaser.Scene {
   constructor() { super('Main'); }
@@ -84,14 +85,16 @@ class Main extends Phaser.Scene {
 
     // ---- runtime state
     this.live = new Map(); this.creatures = []; this.anim = []; this.shrineLive = new Map(); this.glows = new Map();
-    this.found = new Set(); this.god = false; this.popupIdx = -1; this.dismissed = -1; this.hudTick = 0; this.animTick = 0;
+    this.found = KEEP_FOUND || new Set(); KEEP_FOUND = null; this.god = false; this.popupIdx = -1; this.dismissed = -1; this.hudTick = 0; this.animTick = 0;
     this.reset();
     UI.onClose = () => this.closePopup(true);
     UI.onRestart = () => { if (this.mode !== 'play') this.reset(); };
-    this.scale.on('resize', gs => { this.gw = gs.width; this.gh = gs.height; });
+    if (this._onResize) this.scale.off('resize', this._onResize);       // a restart runs create() again: don't stack listeners
+    this._onResize = gs => { this.gw = gs.width; this.gh = gs.height; };
+    this.scale.on('resize', this._onResize);
     this.installTestHook();
     this.cameras.main.setBackgroundColor('#3d758e');
-    const ld = $('loading'); ld.classList.add('done'); setTimeout(() => ld.remove(), 600);
+    const ld = $('loading'); if (ld) { ld.classList.add('done'); setTimeout(() => ld.remove(), 600); }
   }
 
   reset() {
