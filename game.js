@@ -324,9 +324,12 @@ loadRepos().then(res => {
     input: { keyboard: false, mouse: false, touch: false, gamepad: false }, scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: [Main] });
   // recompute on every kind of viewport change: window resize, rotation, the URL bar sliding in/out (visualViewport), and a hybrid device switching to touch
   const fit = () => {
-    VIEW = computeView();
-    if (game.scale.gameSize.width !== VIEW.gw || game.scale.gameSize.height !== VIEW.gh) game.scale.setGameSize(VIEW.gw, VIEW.gh); else game.scale.refresh();
-    const scn = game.scene.getScene('Main'); if (scn && scn.sys.isActive()) scn.snap = true;
+    requestAnimationFrame(() => {
+      VIEW = computeView();
+      if (game.scale.gameSize.width !== VIEW.gw || game.scale.gameSize.height !== VIEW.gh) game.scale.setGameSize(VIEW.gw, VIEW.gh);
+      game.scale.refresh();
+      const scn = game.scene.getScene('Main'); if (scn && scn.sys.isActive()) scn.snap = true;
+    });
   };
   for (const ev of ['resize', 'orientationchange', 'dd:touch']) addEventListener(ev, fit);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
