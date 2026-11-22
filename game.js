@@ -323,7 +323,10 @@ loadRepos().then(res => {
   const game = new Phaser.Game({ type: Phaser.AUTO, width: VIEW.gw, height: VIEW.gh, parent: 'game', backgroundColor: '#3d758e', pixelArt: true, roundPixels: true,
     input: { keyboard: false, mouse: false, touch: false, gamepad: false }, scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: [Main] });
   // recompute on every kind of viewport change: window resize, rotation, the URL bar sliding in/out (visualViewport), and a hybrid device switching to touch
-  const fit = () => {
+  // orientationchange fires before the browser settles the new width/height, so it needs a delayed fit; plain resize and visualViewport use rAF.
+  let fitTimer = null;
+  const fit = (delay = 0) => {
+    if (delay > 0) { if (fitTimer) clearTimeout(fitTimer); fitTimer = setTimeout(() => { fitTimer = null; fit(0); }, delay); return; }
     requestAnimationFrame(() => {
       VIEW = computeView();
       if (game.scale.gameSize.width !== VIEW.gw || game.scale.gameSize.height !== VIEW.gh) game.scale.setGameSize(VIEW.gw, VIEW.gh);
@@ -331,6 +334,7 @@ loadRepos().then(res => {
       const scn = game.scene.getScene('Main'); if (scn && scn.sys.isActive()) scn.snap = true;
     });
   };
-  for (const ev of ['resize', 'orientationchange', 'dd:touch']) addEventListener(ev, fit);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+  for (const ev of ['resize', 'dd:touch']) addEventListener(ev, () => fit(0));
+  addEventListener('orientationchange', () => { fit(0); fit(250); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => fit(0));
 }).catch(e => { $('loading-text').textContent = 'COULD NOT LOAD THE WORLD'; console.error(e); });
